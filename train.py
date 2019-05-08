@@ -27,7 +27,7 @@ if __name__ == '__main__':
     args = parser.parse_args()
     model_name = args.train_file
     '''
-    the from of 'train_pair.txt' is 
+    the form of 'train_pair.txt' is 
     img_path1 gt_path1\n
     img_path2 gt_path2\n 
     '''
