@@ -3,3 +3,4 @@
 *.pyo
 *.csv
 *.txt
+__pycache__/
