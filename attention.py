@@ -6,10 +6,12 @@ from bilinear_upsampling import BilinearUpsampling
 class BatchNorm(BatchNormalization):
     def call(self, inputs, training=None):
         return super(self.__class__, self).call(inputs, training=True)
+
     def BN(input_tensor,block_id):
         bn = BatchNorm(name=block_id+'_BN')(input_tensor)
         a = Activation('relu',name=block_id+'_relu')(bn)
         return a
+
     def l1_reg(weight_matrix):
         return K.mean(weight_matrix)
     
@@ -24,7 +26,7 @@ class Repeat(Layer):
     def get_config(self):
         config = {
                 'repeat_list': self.repeat_list
-                }
+        }
         base_config = super(Repeat, self).get_config()
         return dict(list(base_config.items()) + list(config.items()))
     
@@ -37,6 +39,7 @@ class Repeat(Layer):
 def SpatialAttention(inputs,name):
     k = 9
     H, W, C = map(int,inputs.get_shape()[1:])
+    C = int(C)
     attention1 = Conv2D(C / 2, (1, k), padding='same', name=name+'_1_conv1')(inputs)
     attention1 = BN(attention1,'attention1_1')
     attention1 = Conv2D(1, (k, 1), padding='same', name=name + '_1_conv2')(attention1)
@@ -52,6 +55,7 @@ def SpatialAttention(inputs,name):
 
 def ChannelWiseAttention(inputs,name):
     H, W, C = map(int, inputs.get_shape()[1:])
+    C = int(C)
     attention = GlobalAveragePooling2D(name=name+'_GlobalAveragePooling2D')(inputs)
     attention = Dense(C / 4, activation='relu')(attention)
     attention = Dense(C, activation='sigmoid',activity_regularizer=l1_reg)(attention)
