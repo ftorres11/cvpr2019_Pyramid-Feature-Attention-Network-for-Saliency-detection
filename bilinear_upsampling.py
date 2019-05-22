@@ -3,17 +3,19 @@ from keras.engine import Layer
 from keras.utils import conv_utils
 from keras.engine import InputSpec
 
+
+# ========================================================================
+# Classes
+# ========================================================================
 class BilinearUpsampling(Layer):
     """Just a simple bilinear upsampling layer. Works only with TF.
     Args:
     upsampling: tuple of 2 numbers > 0. The upsampling ratio for h and w
     output_size: used instead of upsampling arg if passed!
     """
-    
-    def __init__(self, upsampling=(2, 2), output_size=None, data_format=None, **kwargs):
-        
-        super(BilinearUpsampling, self).__init__(**kwargs)
-        
+    def __init__(self, upsampling=(2, 2), output_size=None,
+                 data_format=None, **kwargs):        
+        super(BilinearUpsampling, self).__init__(**kwargs)       
         self.data_format = conv_utils.normalize_data_format(data_format)
         self.input_spec = InputSpec(ndim=4)
         if output_size:
@@ -41,13 +43,14 @@ class BilinearUpsampling(Layer):
         
     def call(self, inputs):
         if self.upsampling:
-            return K.tf.image.resize_bilinear(inputs, (int(inputs.shape[1] * self.upsampling[0]),
-                                                       int(inputs.shape[2] * self.upsampling[1])),
-                                              align_corners=True)
+            return K.tf.image.resize_bilinear(inputs,
+                   (int(inputs.shape[1] * self.upsampling[0]),
+                    int(inputs.shape[2] * self.upsampling[1])),
+                    align_corners=True)
         else:
             return K.tf.image.resize_bilinear(inputs, (self.output_size[0],
-                                                       self.output_size[1]),
-                                              align_corners=True)
+                                                      self.output_size[1]),
+                                                      align_corners=True)
     
     def get_config(self):
         config = {'upsampling': self.upsampling,
@@ -55,4 +58,5 @@ class BilinearUpsampling(Layer):
                   'data_format': self.data_format}
         base_config = super(BilinearUpsampling, self).get_config()
         return dict(list(base_config.items()) + list(config.items()))
+
 

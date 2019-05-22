@@ -3,6 +3,52 @@ from keras.engine import Layer
 from keras.layers import *
 from bilinear_upsampling import BilinearUpsampling
 
+
+
+# ========================================================================
+# Functions
+# ========================================================================
+def SpatialAttention(inputs,name):
+    k = 9
+    H, W, C = map(int,inputs.get_shape()[1:])
+    C = int(C)
+    attention1 = Conv2D(int(C/2), (1, k), padding='same',\
+                 name=name+'_1_conv1')(inputs)
+    attention1 = BN(attention1,'attention1_1')
+    attention1 = Conv2D(1, (k, 1), padding='same',\
+                 name=name + '_1_conv2')(attention1)
+    attention1 = BN(attention1, 'attention1_2')
+    attention2 = Conv2D(C / 2, (k, 1), padding='same',\
+                 name=name + '_2_conv1')(inputs)
+    attention2 = BN(attention2, 'attention2_1')
+    attention2 = Conv2D(1, (1, k), padding='same',\
+                 name=name + '_2_conv2')(attention2)
+    attention2 = BN(attention2, 'attention2_2')
+    attention = Add(name=name+'_add')([attention1,attention2])
+    attention = Activation('sigmoid')(attention)
+    attention = Repeat(repeat_list=[1, 1, 1, C])(attention)
+    return attention
+
+
+# ======================================================================== 
+def ChannelWiseAttention(inputs,name):
+    H, W, C = map(int, inputs.get_shape()[1:])
+    C = int(C)
+    attention = GlobalAveragePooling2D(name=name+\
+                '_GlobalAveragePooling2D')(inputs)
+    attention = Dense(int(C/4), activation='relu')(attention)
+    attention = Dense(C, activation='sigmoid',\
+                activity_regularizer=l1_reg)(attention)
+    attention = Reshape((1, 1, C),name=name+'_reshape')(attention)
+    attention = Repeat(repeat_list=[1, H, W, 1],\
+                name=name+'_repeat')(attention)
+    attention = Multiply(name=name + '_multiply')([attention, inputs])
+    return attention
+
+
+# ========================================================================
+# Classes
+# ========================================================================
 class BatchNorm(BatchNormalization):
     def call(self, inputs, training=None):
         return super(self.__class__, self).call(inputs, training=True)
@@ -14,7 +60,9 @@ class BatchNorm(BatchNormalization):
 
     def l1_reg(weight_matrix):
         return K.mean(weight_matrix)
-    
+
+
+# ========================================================================    
 class Repeat(Layer):
     def __init__(self,repeat_list, **kwargs):
         super(Repeat, self).__init__(**kwargs)
@@ -36,31 +84,5 @@ class Repeat(Layer):
             output_shape.append(input_shape[i]*self.repeat_list[i])
         return tuple(output_shape)
     
-def SpatialAttention(inputs,name):
-    k = 9
-    H, W, C = map(int,inputs.get_shape()[1:])
-    C = int(C)
-    attention1 = Conv2D(C / 2, (1, k), padding='same', name=name+'_1_conv1')(inputs)
-    attention1 = BN(attention1,'attention1_1')
-    attention1 = Conv2D(1, (k, 1), padding='same', name=name + '_1_conv2')(attention1)
-    attention1 = BN(attention1, 'attention1_2')
-    attention2 = Conv2D(C / 2, (k, 1), padding='same', name=name + '_2_conv1')(inputs)
-    attention2 = BN(attention2, 'attention2_1')
-    attention2 = Conv2D(1, (1, k), padding='same', name=name + '_2_conv2')(attention2)
-    attention2 = BN(attention2, 'attention2_2')
-    attention = Add(name=name+'_add')([attention1,attention2])
-    attention = Activation('sigmoid')(attention)
-    attention = Repeat(repeat_list=[1, 1, 1, C])(attention)
-    return attention
-
-def ChannelWiseAttention(inputs,name):
-    H, W, C = map(int, inputs.get_shape()[1:])
-    C = int(C)
-    attention = GlobalAveragePooling2D(name=name+'_GlobalAveragePooling2D')(inputs)
-    attention = Dense(C / 4, activation='relu')(attention)
-    attention = Dense(C, activation='sigmoid',activity_regularizer=l1_reg)(attention)
-    attention = Reshape((1, 1, C),name=name+'_reshape')(attention)
-    attention = Repeat(repeat_list=[1, H, W, 1],name=name+'_repeat')(attention)
-    attention = Multiply(name=name + '_multiply')([attention, inputs])
-    return attention
+    
     

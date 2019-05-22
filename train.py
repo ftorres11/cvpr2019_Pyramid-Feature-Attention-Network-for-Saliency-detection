@@ -11,6 +11,10 @@ import math
 # os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
 # os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 
+
+# ========================================================================
+# Functions
+# ========================================================================
 def lr_scheduler(epoch):
     drop = 0.5
     epoch_drop = epochs/8.
@@ -18,11 +22,16 @@ def lr_scheduler(epoch):
     print('lr: %f' % lr)
     return lr
 
+
+# ========================================================================
 if __name__ == '__main__':
     import argparse
-    parser = argparse.ArgumentParser(description='Train model your dataset')
-    parser.add_argument('--train_file',default='train_pair.txt',help='your train file', type=str)
-    parser.add_argument('--model_weights',default='model/vgg16_no_top.h5',help='your model weights', type=str)
+    parser = argparse.ArgumentParser(description=\
+             'Train model your dataset')
+    parser.add_argument('--train_file', default='train_pair.txt',
+             help='your train file', type=str)
+    parser.add_argument('--model_weights', default='model/vgg16_no_top.h5',
+             help='your model weights', type=str)
 
     args = parser.parse_args()
     model_name = args.train_file
@@ -63,21 +72,27 @@ if __name__ == '__main__':
     if target_size[0 ] % 32 != 0 or target_size[1] % 32 != 0:
         raise ValueError('Image height and wight must be a multiple of 32')
 
-    traingen = getTrainGenerator(train_path, target_size, batch_size, israndom=True)
+    traingen = getTrainGenerator(train_path, target_size, batch_size,
+               israndom=True)
 
     model_input = Input(shape=(target_size[0],target_size[1],3))
-    model = VGG16(model_input,dropout=dropout, with_CPFE=with_CPFE, with_CA=with_CA, with_SA=with_SA)
+    model = VGG16(model_input,dropout=dropout, with_CPFE=with_CPFE,
+            with_CA=with_CA, with_SA=with_SA)
     for i,layer in enumerate(model.layers):
         print i,layer.name
     model.load_weights(model_name,by_name=True)
 
     tb = callbacks.TensorBoard(log_dir=tb_log)
     lr_decay = callbacks.LearningRateScheduler(schedule=lr_scheduler)
-    es = callbacks.EarlyStopping(monitor='loss', patience=3, verbose=0, mode='auto')
-    modelcheck = callbacks.ModelCheckpoint(model_save+'{epoch:05d}.h5', monitor='loss', verbose=1,
-        save_best_only=False, save_weights_only=True, mode='auto', period=model_save_period)
+    es = callbacks.EarlyStopping(monitor='loss', patience=3, verbose=0,
+             mode='auto')
+    modelcheck = callbacks.ModelCheckpoint(model_save+'{epoch:05d}.h5',
+             monitor='loss', verbose=1, save_best_only=False, 
+             save_weights_only=True, mode='auto', period=model_save_period)
     callbacks = [lr_decay,modelcheck,tb]
 
     model.compile(optimizer=optimizer,loss=loss,metrics=metrics)
     model.fit_generator(traingen, steps_per_epoch=steps_per_epoch,
                         epochs=epochs,verbose=1,callbacks=callbacks)
+
+
