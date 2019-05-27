@@ -1,11 +1,8 @@
 import numpy as np
 import cv2
 import random
+import pdb
 
-
-# ========================================================================
-# Functions
-# ========================================================================
 def padding(x,y):
     h,w,c = x.shape
     size = max(h,w)
@@ -17,8 +14,6 @@ def padding(x,y):
     temp_y[paddingh:h+paddingh,paddingw:w+paddingw] = y
     return temp_x,temp_y
 
-
-# ========================================================================
 def random_crop(x,y):
     h,w = y.shape
     randh = np.random.randint(h/8)
@@ -32,8 +27,6 @@ def random_crop(x,y):
         y = y[::, ::-1]
     return x[p0:p1,p2:p3],y[p0:p1,p2:p3]
 
-
-# ========================================================================
 def random_rotate(x,y):
     angle = np.random.randint(-25,25)
     h, w = y.shape
@@ -41,16 +34,12 @@ def random_rotate(x,y):
     M = cv2.getRotationMatrix2D(center, angle, 1.0)
     return cv2.warpAffine(x, M, (w, h)),cv2.warpAffine(y, M, (w, h))
 
-
-# ========================================================================
 def random_light(x):
     contrast = np.random.rand(1)+0.5
     light = np.random.randint(-20,20)
     x = contrast*x + light
     return np.clip(x,0,255)
 
-
-# ========================================================================
 def getTrainGenerator(file_path, target_size, batch_size, israndom=False):
     f = open(file_path, 'r')
     trainlist = f.readlines()
@@ -88,9 +77,6 @@ def getTrainGenerator(file_path, target_size, batch_size, israndom=False):
             batch_x.append(x)
             batch_y.append(y)
             if len(batch_x) == batch_size:
-                yield (np.array(batch_x, dtype=np.float32),
-                       np.array(batch_y, dtype=np.float32))
+                yield (np.array(batch_x, dtype=np.float32), np.array(batch_y, dtype=np.float32))
                 batch_x = []
                 batch_y = []
-
-

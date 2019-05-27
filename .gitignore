@@ -1,6 +1,12 @@
 # Byte-compiled / optimized / DLL files
 *.pyc
 *.pyo
-*.csv
-*.txt
+*.backup
 __pycache__/
+examples/
+model/
+Trials/
+tensorboard-logs/
+*.txt
+# C extensions
+*.so
