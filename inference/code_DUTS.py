@@ -1,8 +1,11 @@
 # -*- coding: utf-8 -*-
-import numpy as np
-import cv2
 import os
 import pdb
+import cv2
+import json
+import numpy as np
+import scipy as sc
+from PIL import Image
 
 from keras.layers import Input
 from model import VGG16
@@ -55,7 +58,7 @@ def getres(predict, shape):
     predict = sigmoid(predict)*255
     predict = np.array(predict, dtype=np.uint8)
     predict = np.squeeze(predict)
-    predict = cut(predict, shape)
+    predict = cv2.resize(predict, shape[::-1])
     return predict
 
 
@@ -70,12 +73,57 @@ def laplace_edge(x):
 
 def str_find(char, target):
     indexes = []
-    for idx, elem in char:
+    for idx, elem in enumerate(char):
         if elem == target:
             indexes.append(idx)
     if len(indexes) == 0:
         indexes.append(-1)
     return indexes
+
+
+def pr_im(pred, normalized):
+    thresh = range(0, 256)
+    normalized.astype(int)
+    tot_elem = pred.shape[0]*pred.shape[1]
+    prec = []
+    rec = []
+    fval = []
+    wfval = []
+    beta_sq = 0.3
+    for x in thresh:
+        # Getting those that pass the threshold
+        booled_pos = (pred >= x)*1  # Positives
+        booled_neg = (pred < x)*1  #Negatives
+
+        positives = (booled_pos == normalized)
+        negatives = (booled_neg == (normalized == 0)*1)
+
+        # Cases
+        tp_x, tp_y = np.where(positives == True)  #TP
+        fp_x, fp_y = np.where((booled_pos-normalized) == 1)  #FP
+
+        tn_x, tn_y = np.where(negatives==True)  #TN
+        fn_x, fn_y = np.where(booled_neg-((normalized == 0)*1)==1)  #FN
+
+        TP = len(tp_x)
+        FP = len(fp_x)
+        TN = len(tn_x)
+        FN = len(fn_x)
+
+        precision = float(TP)/float(TP+FP)
+        recall = float(TP)/float(TP+FN)
+        prec.append(precision)
+        rec.append(recall)
+
+        fval.append(2*((precision*recall)/(precision+recall)))
+        wfval.append((1+beta_sq)*((precision*recall)/\
+                    ((beta_sq*precision)+recall)))
+
+    prec.reverse()
+    rec.reverse()
+    max_f = np.max(fval)
+    max_fb = np.max(wfval)
+    return prec, rec, max_f, max_fb
 
 
 # ========================================================================
@@ -86,8 +134,8 @@ os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
 model_name = 'model/PFA_00050.h5'
 target_size = (256, 256)
 
-target_store = 'Trials/{}'.format(model_name.replace('model/')\
-                .replace('.h5'))
+target_store = 'Trials/{}'.format(model_name.replace('model/', '')\
+                .replace('.h5', ''))
 
 target_sal = os.path.join(target_store, 'Salient_Maps')
 target_conf = os.path.join(target_store, 'Confidence')
@@ -114,16 +162,63 @@ for layer in model.layers:
 
 # ========================================================================
 # Preparing the evaluation
-val_lines = open('test_pair.txt', 'r').readlines()
+val_lines = open('../datasets/test_pair.txt', 'r').readlines()
+precision = 0
+recall = 0
+fval = 0
+wfval = 0
 for idx, line_idx in enumerate(val_lines):
     raw_route, mask_route = line_idx.split(' ')
     raw_route = raw_route.strip()
     mask_route = mask_route.strip()
     raw_img, raw_shape = load_image(raw_route)
-    mask_im, mask_shpe = load_image(mask_route)
+    mask_im = Image.open(mask_route)
+    mask_np = np.array(mask_im)/255
+    mask_sh = mask_np.shape
 
     raw_img = np.array(raw_img, dtype=np.float32)
     sa = model.predict(raw_img)
-    sa = getres(sa, raw_shape)
-   
-    pdb.set_trace()
+    segm = sigmoid(sa)
+    segm = np.squeeze(segm)*255
+    sa = getres(sa, mask_sh[:2])
+    
+    sl_idx = str_find(raw_route, '/')
+    img_name = raw_route[sl_idx[-1]+1::]
+    dest_sal = os.path.join(target_sal, img_name)
+    dest_conf = os.path.join(target_conf, img_name)
+
+    if idx % 1000 == 0:
+        cv2.imwrite(dest_sal, segm)  #Segmentation
+        cv2.imwrite(dest_conf, sa)  # Sa?
+
+    prec, rec, f_it, wf_it = pr_im(sa, mask_np)
+
+    precision += np.asarray(prec)
+    recall += np.asarray(rec)
+
+    fval += f_it
+    wfval += wf_it
+
+
+precision = precision.astype(float)/float(idx+1)
+recall = recall.astype(float)/float(idx+1)
+avg_f = fval/float(idx+1)
+avgwf = wfval/float(idx+1)
+plt.figure()
+plt.plot(recall, precision, 'r-')
+plt.xlabel('Recall')
+plt.ylabel('Precision')
+plt.grid()
+plt.title('PR Curve, f-value {:.3}, weighted f-value {:.3}'.format(avg_f, avgwf))
+plt.savefig(os.path.join(target_store,'pr-curve.pdf'))
+
+
+data_sto = {}
+data_sto['precision'] = precision.tolist()
+data_sto['recall'] = recall.tolist()
+data_sto['f_value'] = avg_f
+data_sto['wf_value'] = avgwf
+
+with open(os.path.join(target_store, 'metrics.json'), 'w') as outfile:
+    json.dump(data_sto, outfile)
+

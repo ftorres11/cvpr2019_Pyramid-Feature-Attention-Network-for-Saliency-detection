@@ -1,17 +1,26 @@
-from keras import callbacks, optimizers
-import tensorflow as tf
+# -*- coding: utf-8 -*-
 import os
-from keras.layers import Input
-from model import VGG16
-from data import getTrainGenerator
+import math
+import argparse
 from utils import *
 from edge_hold_loss import *
-import math
-import pdb
 
-#os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
-#os.environ["CUDA_VISIBLE_DEVICES"] = "0"
+import tensorflow as tf
+from keras.layers import Input
+from keras import callbacks, optimizers
 
+from model import VGG16
+from data import getTrainGenerator
+
+
+# ========================================================================
+# Environmental variables
+# ========================================================================
+os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
+os.environ["CUDA_VISIBLE_DEVICES"] = "1"
+# ========================================================================
+# Functions
+# ========================================================================
 def lr_scheduler(epoch):
     drop = 0.5
     epoch_drop = epochs/8.
@@ -19,39 +28,41 @@ def lr_scheduler(epoch):
     print('lr: %f' % lr)
     return lr
 
+
+# ========================================================================
+# Main Routine
+# ========================================================================
 if __name__ == '__main__':
-    import argparse
-    parser = argparse.ArgumentParser(description='Train model your dataset')
-    parser.add_argument('--train_file',default='train_pair.txt',help='your train file', type=str)
-    parser.add_argument('--model_weights',default='model/vgg16_no_top.h5',help='your model weights', type=str)
+    # Parsing arguments
+    parser = argparse.ArgumentParser(description=
+                      'Train model your dataset')
+    parser.add_argument('--train_file', default='train_pair.txt',help = 
+                      'your train file', type=str)
+    parser.add_argument('--model_weights', default='model/vgg16_no_top.h5',
+                      help='your model weights', type=str)
 
     args = parser.parse_args()
     model_name = args.model_weights
     train_path = args.train_file
-    '''
-    the from of 'train_pair.txt' is 
-    img_path1 gt_path1\n
-    img_path2 gt_path2\n 
-    '''
-    #train_path = args.model_weights
     
-    #print "train_file", train_path
-    #print "model_weights", model_name
-    
+    # Model parameters
     target_size = (256,256)
     batch_size = 15
     base_lr = 1e-2
     epochs = 50
-
+    
+    # Dataloading routine
     f = open(train_path, 'r')
     trainlist = f.readlines()
     f.close()
+     
+    # Training routine definitions
     steps_per_epoch = len(trainlist)/batch_size
-
     optimizer = optimizers.SGD(lr=base_lr, momentum=0.9, decay=0)
-    # optimizer = optimizers.Adam(lr=base_lr)
+    '''optimizer = optimizers.Adam(lr=base_lr)'''  # Optional optimizer
     loss = EdgeHoldLoss
 
+    # Storing and metrics 
     metrics = [acc,pre,rec]
     dropout = True
     with_CPFE = True
@@ -61,25 +72,34 @@ if __name__ == '__main__':
     tb_log = './tensorboard-logs/COCO'
     model_save = 'model/COCO_'
     model_save_period = 5
-
     if target_size[0 ] % 32 != 0 or target_size[1] % 32 != 0:
-        raise ValueError('Image height and weight must be a multiple of 32')
+        raise ValueError('{} {}'.format('Image height and weight must',
+                                        'be a multiple of 32'))
 
-    traingen = getTrainGenerator(train_path, target_size, batch_size, israndom=False)
+    # Training data generator and or shuffler
+    traingen = getTrainGenerator(train_path, target_size, batch_size,
+                                 israndom=False)
 
+    # Model definition and options
     model_input = Input(shape=(target_size[0],target_size[1],3))
-    model = VGG16(model_input,dropout=dropout, with_CPFE=with_CPFE, with_CA=with_CA, with_SA=with_SA)
-    #for i,layer in enumerate(model.layers):
-    #    print i,layer.name
+    model = VGG16(model_input,dropout=dropout, with_CPFE=with_CPFE, 
+                  with_CA=with_CA, with_SA=with_SA)
     model.load_weights(model_name,by_name=True)
 
+    # Tensorflow & Tensorboard options
     tb = callbacks.TensorBoard(log_dir=tb_log)
     lr_decay = callbacks.LearningRateScheduler(schedule=lr_scheduler)
-    es = callbacks.EarlyStopping(monitor='loss', patience=3, verbose=0, mode='auto')
-    modelcheck = callbacks.ModelCheckpoint(model_save+'{epoch:05d}.h5', monitor='loss', verbose=1,
-        save_best_only=False, save_weights_only=True, mode='auto', period=model_save_period)
+    es = callbacks.EarlyStopping(monitor='loss', patience=3, verbose=0,
+                                 mode='auto')
+    modelcheck = callbacks.ModelCheckpoint(model_save+'{epoch:05d}.h5',
+                                 monitor='loss', verbose=1,
+                                 save_best_only=False,
+                                 save_weights_only=True, mode='auto',
+                                 period=model_save_period)
+
     callbacks = [lr_decay,modelcheck,tb]
 
+    # Training routine
     model.compile(optimizer=optimizer,loss=loss,metrics=metrics)
     model.fit_generator(traingen, steps_per_epoch=steps_per_epoch,
                         epochs=epochs,verbose=1,callbacks=callbacks)

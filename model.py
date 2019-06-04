@@ -1,10 +1,41 @@
-from keras.models import *
 from attention import *
+from keras.models import *
 from bilinear_upsampling import BilinearUpsampling
 
 
 # ========================================================================
-# Functions and Model
+# Classes
+# ========================================================================
+class BatchNorm(BatchNormalization):
+    def call(self, inputs, training=None):
+          return super(self.__class__, self).call(inputs, training=True)
+
+
+# ========================================================================
+class Copy(Layer):
+    def call(self, inputs, **kwargs):
+        copy = tf.identity(inputs)
+        return copy
+
+    def compute_output_shape(self, input_shape):
+        return input_shape
+
+
+# ========================================================================
+class layertile(Layer):
+    def call(self, inputs, **kwargs):
+        image = tf.reduce_mean(inputs, axis=-1)
+        image = tf.expand_dims(image, -1)
+        image = tf.tile(image, [1, 1, 1, 32])
+        return image
+
+    def compute_output_shape(self, input_shape):
+        output_shape = list(input_shape)[:-1] + [32]
+        return tuple(output_shape)
+
+
+# ========================================================================
+# Functions & Modules
 # ========================================================================
 def BN(input_tensor,block_id):
     bn = BatchNorm(name=block_id+'_BN')(input_tensor)
@@ -14,9 +45,9 @@ def BN(input_tensor,block_id):
 
 # ========================================================================
 def AtrousBlock(input_tensor, filters, rate, block_id, stride=1):
-    x = Conv2D(filters, (3, 3), strides=(stride, stride),
-               dilation_rate=(rate, rate), padding='same', use_bias=False,
-               name=block_id + '_dilation')(input_tensor)
+    x = Conv2D(filters, (3, 3), strides=(stride, stride), 
+               dilation_rate=(rate, rate), padding='same', 
+               use_bias=False, name=block_id + '_dilation')(input_tensor)
     return x
 
 
@@ -35,6 +66,8 @@ def CFE(input_tensor, filters, block_id):
 
 
 # ========================================================================
+# Model Definition
+# ========================================================================
 def VGG16(img_input, dropout=False, with_CPFE=False, with_CA=False,
           with_SA=False, droup_rate=0.3):
     # Block 1
@@ -47,7 +80,6 @@ def VGG16(img_input, dropout=False, with_CPFE=False, with_CA=False,
 
     if dropout:
         x = Dropout(droup_rate)(x)
-
     # Block 2
     x = Conv2D(128, (3, 3), activation='relu', padding='same',
                name='block2_conv1')(x)
@@ -58,7 +90,6 @@ def VGG16(img_input, dropout=False, with_CPFE=False, with_CA=False,
 
     if dropout:
         x = Dropout(droup_rate)(x)
-
     # Block 3
     x = Conv2D(256, (3, 3), activation='relu', padding='same',
                name='block3_conv1')(x)
@@ -71,7 +102,6 @@ def VGG16(img_input, dropout=False, with_CPFE=False, with_CA=False,
 
     if dropout:
         x = Dropout(droup_rate)(x)
-
     # Block 4
     x = Conv2D(512, (3, 3), activation='relu', padding='same',
                name='block4_conv1')(x)
@@ -93,26 +123,24 @@ def VGG16(img_input, dropout=False, with_CPFE=False, with_CA=False,
                name='block5_conv3')(x)
     if dropout:
         x = Dropout(droup_rate)(x)
-
     C5 = x
     C1 = Conv2D(64, (3, 3), padding='same', name='C1_conv')(C1)
     C1 = BN(C1, 'C1_BN')
     C2 = Conv2D(64, (3, 3), padding='same', name='C2_conv')(C2)
     C2 = BN(C2, 'C2_BN')
-
     if with_CPFE:
         C3_cfe = CFE(C3, 32, 'C3_cfe')
         C4_cfe = CFE(C4, 32, 'C4_cfe')
         C5_cfe = CFE(C5, 32, 'C5_cfe')
         C5_cfe = BilinearUpsampling(upsampling=(4, 4),
-                                    name='C5_cfe_up4')(C5_cfe)
+                     name='C5_cfe_up4')(C5_cfe)
         C4_cfe = BilinearUpsampling(upsampling=(2, 2),
-                                    name='C4_cfe_up2')(C4_cfe)
-        C345 = Concatenate(name='C345_aspp_concat', axis=-1)([C3_cfe,
-                           C4_cfe, C5_cfe])
+                     name='C4_cfe_up2')(C4_cfe)
+        C345 = Concatenate(name='C345_aspp_concat',
+                     axis=-1)([C3_cfe, C4_cfe, C5_cfe])
         if with_CA:
             C345 = ChannelWiseAttention(C345,
-                        name='C345_ChannelWiseAttention_withcpfe')
+                     name='C345_ChannelWiseAttention_withcpfe')
     C345 = Conv2D(64, (1, 1), padding='same', name='C345_conv')(C345)
     C345 = BN(C345,'C345')
     C345 = BilinearUpsampling(upsampling=(4, 4), name='C345_up4')(C345)
@@ -129,34 +157,4 @@ def VGG16(img_input, dropout=False, with_CPFE=False, with_CA=False,
 
     model = Model(inputs=img_input, outputs=sa, name="BaseModel")
     return model
-
-# ========================================================================
-# Classes
-# ========================================================================
-class BatchNorm(BatchNormalization):
-    def call(self, inputs, training=None):
-          return super(self.__class__, self).call(inputs, training=True)
-
-
-# ========================================================================
-class Copy(Layer):
-    def call(self, inputs, **kwargs):
-        copy = tf.identity(inputs)
-        return copy
-    def compute_output_shape(self, input_shape):
-        return input_shape
-
-
-# ========================================================================
-class layertile(Layer):
-    def call(self, inputs, **kwargs):
-        image = tf.reduce_mean(inputs, axis=-1)
-        image = tf.expand_dims(image, -1)
-        image = tf.tile(image, [1, 1, 1, 32])
-        return image
-
-    def compute_output_shape(self, input_shape):
-        output_shape = list(input_shape)[:-1] + [32]
-        return tuple(output_shape)
-
 
